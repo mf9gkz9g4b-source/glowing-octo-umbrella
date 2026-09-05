@@ -1,0 +1,23 @@
+[
+  {
+    "url": "https://abidlabs-en2fr.hf.space/run/predict",
+    "payload": {"data": ["<PROMPT>"]},
+    "headers": {"Content-Type": "application/json"},
+    "parser": "first_text",
+    "notes": "Example translator demo; availability may vary."
+  },
+  {
+    "url": "https://tomsoderlund-rest-api-with-gradio.hf.space/run/predict",
+    "payload": {"data": ["<PROMPT>"]},
+    "headers": {"Content-Type": "application/json"},
+    "parser": "first_text",
+    "notes": "Simple echo demo example."
+  },
+  {
+    "url": "https://abidlabs-whisper.hf.space/gradio_api/predict",
+    "payload": {"data": ["<PROMPT>"]},
+    "headers": {"Content-Type": "application/json"},
+    "parser": "first_text",
+    "notes": "Speech demo; may require different payload for audio inputs."
+  }
+]
