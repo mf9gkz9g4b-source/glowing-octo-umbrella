@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+requests
+# Optional (for local HF models or OpenAI adapter):
+# transformers
+# torch
+# openai
