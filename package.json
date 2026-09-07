@@ -1,0 +1,17 @@
+{
+  "name": "glowing-octo-umbrella-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:web": "echo 'No build step required; static/ is the webDir'",
+    "cap:init": "npx cap init",
+    "cap:add-android": "npx cap add android",
+    "cap:add-ios": "npx cap add ios"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.0.0"
+  },
+  "dependencies": {
+    "@capacitor/core": "^5.0.0"
+  }
+}

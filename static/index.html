@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b74de" />
+  <link rel="manifest" href="/static/manifest.json">
   <title>Personal AI Agent — All-in-One Dashboard</title>
   <style>
     :root{--bg:#f7fafc;--panel:#fff;--muted:#6b7280;--accent:#0b74de;--success:#0b8a4a}
@@ -171,7 +173,7 @@ let saved = [];
 const STORAGE_KEY = 'publicSpaces:v1';
 
 function showStatus(msg, transient=true){ statusEl.textContent = msg || ''; if (transient && msg) setTimeout(()=>{ if (statusEl.textContent === msg) statusEl.textContent = ''; }, 6000); }
-function escapeHtml(s){ return String(s).replace(/[&<>\"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\\':'\\\\','"':'&quot;',"'":'&#39;','`':'&#96;'})[c]); }
+function escapeHtml(s){ return String(s).replace(/[&<>\\"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\\':'\\\\','"':'&quot;',"'":'&#39;','`':'&#96;'})[c]); }
 function addChat(who, text){ const d = document.createElement('div'); d.className='msg'; d.innerHTML = `<div><strong class="who">${escapeHtml(who)}:</strong> <span>${escapeHtml(String(text)).slice(0, parseInt(previewLen.textContent)).replace(/\n/g,'<br/>')}</span></div>`; if (who === 'user') d.classList.add('user'); chatWindow.appendChild(d); chatWindow.scrollTop = chatWindow.scrollHeight; }
 
 function saveToLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); }
@@ -219,6 +221,17 @@ document.getElementById('clearChat').addEventListener('click', ()=>{ chatWindow.
 
 // startup
 loadFromLocal(); renderSaved(); fillForm(builtInSpaces[0]); showStatus('Ready — use server mode for best results (avoid CORS).');
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/static/service-worker.js').then(function(registration) {
+      console.log('ServiceWorker registration successful with scope: ', registration.scope);
+    }, function(err) {
+      console.log('ServiceWorker registration failed: ', err);
+    });
+  });
+}
 </script>
 </body>
 </html>
