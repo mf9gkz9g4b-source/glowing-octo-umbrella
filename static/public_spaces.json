@@ -19,5 +19,29 @@
     "headers": {"Content-Type": "application/json"},
     "parser": "first_text",
     "notes": "Speech demo; may require different payload for audio inputs."
+  },
+  {
+    "url": "https://api.apiverve.com/v1/companynamegenerator",
+    "method": "GET",
+    "payload": {"keyword": "<PROMPT>"},
+    "headers": {"X-API-Key": "<ENV:APIVERSE_API_KEY>"},
+    "parser": "first_text",
+    "notes": "APIVerve company name generator (use prompt as keyword)."
+  },
+  {
+    "url": "https://api.apiverve.com/v1/hashtaggenerator",
+    "method": "POST",
+    "payload": {"text": "<PROMPT>"},
+    "headers": {"Content-Type": "application/json", "X-API-Key": "<ENV:APIVERSE_API_KEY>"},
+    "parser": "first_text",
+    "notes": "APIVerve hashtag generator (returns list of hashtags)."
+  },
+  {
+    "url": "https://api.apiverve.com/v1/passwordgenerator",
+    "method": "GET",
+    "payload": {"length": "12"},
+    "headers": {"X-API-Key": "<ENV:APIVERSE_API_KEY>"},
+    "parser": "first_text",
+    "notes": "APIVerve password generator (change length as needed)."
   }
 ]
