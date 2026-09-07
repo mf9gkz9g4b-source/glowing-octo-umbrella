@@ -1,0 +1,6 @@
+{
+  "appId": "com.example.aiagent",
+  "appName": "Personal AI Agent",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
