@@ -1,9 +1,10 @@
 import os
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List, Dict, Any
 import requests
 import json
+import re
 
 # Optional imports
 _openai = None
@@ -21,6 +22,8 @@ try:
 except Exception:
     _transformers = None
     _torch = None
+
+ENV_RE = re.compile(r"^<ENV:([A-Z0-9_]+)>$")
 
 class BaseAdapter(ABC):
     @abstractmethod
@@ -69,7 +72,7 @@ class HFInferenceAdapter(BaseAdapter):
             if isinstance(data, list) and data and "generated_text" in data[0]:
                 return data[0]["generated_text"]
             if isinstance(data, dict) and "generated_text" in data:
-                return data[0]["generated_text"] if isinstance(data.get(0), dict) else data.get("generated_text")
+                return data["generated_text"]
             return str(data)
         except Exception as e:
             return f"Hugging Face Inference error: {e}"
@@ -91,6 +94,16 @@ class HTTPAdapter(BaseAdapter):
         if not url:
             return "HTTP adapter not configured: set HTTP_AI_URL or pass url in options."
         payload = kwargs.get("payload") or {"input": prompt}
+        # substitute prompt token if present
+        def sub(obj: Any):
+            if isinstance(obj, str):
+                return obj.replace("<PROMPT>", prompt)
+            if isinstance(obj, list):
+                return [sub(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: sub(v) for k, v in obj.items()}
+            return obj
+        payload = sub(payload)
         try:
             resp = requests.post(url, json=payload, headers=headers, timeout=30)
             resp.raise_for_status()
@@ -114,14 +127,16 @@ class MCPAdapter(HTTPAdapter):
 
 class PublicSpacesAdapter(BaseAdapter):
     """
-    Try a list of public Hugging Face Spaces endpoints that accept POST /api/predict or similar.
-    You provide a JSON file static/public_spaces.json with an array of objects:
-      [{ "url": "https://<space>/api/predict", "payload": {"data": ["<PROMPT>"]}, "parser": "first_text" }, ...]
-    The adapter will substitute the prompt into the payload by replacing the token "<PROMPT>".
+    Try a list of public Hugging Face Spaces endpoints or other public endpoints.
+    Entries in static/public_spaces.json may include:
+      { "url": "https://.../run/predict", "method":"POST", "payload": {...}, "headers": {...}, "parser":"first_text" }
+
+    Special header values can reference environment variables using the syntax: "<ENV:VAR_NAME>".
+    The adapter will substitute <PROMPT> inside payloads and will replace headers of the form <ENV:VAR> with the environment value.
     """
     def __init__(self, list_path: str = "static/public_spaces.json"):
         self.list_path = list_path
-        self.spaces = []
+        self.spaces: List[Dict] = []
         self._load()
 
     def _load(self):
@@ -131,6 +146,29 @@ class PublicSpacesAdapter(BaseAdapter):
         except Exception:
             self.spaces = []
 
+    def _substitute_prompt(self, obj: Any, prompt: str) -> Any:
+        if isinstance(obj, str):
+            return obj.replace("<PROMPT>", prompt)
+        if isinstance(obj, list):
+            return [self._substitute_prompt(x, prompt) for x in obj]
+        if isinstance(obj, dict):
+            return {k: self._substitute_prompt(v, prompt) for k, v in obj.items()}
+        return obj
+
+    def _substitute_env_in_headers(self, headers: Dict[str, Any]) -> Dict[str, Any]:
+        out = {}
+        for k, v in (headers or {}).items():
+            if isinstance(v, str):
+                m = ENV_RE.match(v.strip())
+                if m:
+                    envname = m.group(1)
+                    out[k] = os.getenv(envname, "")
+                else:
+                    out[k] = v.replace("<PROMPT>", "")
+            else:
+                out[k] = v
+        return out
+
     async def generate(self, prompt: str, **kwargs):
         # reload each call so user can edit the JSON without restarting
         self._load()
@@ -139,48 +177,47 @@ class PublicSpacesAdapter(BaseAdapter):
         last_err = None
         for entry in self.spaces:
             url = entry.get("url")
+            method = (entry.get("method") or "POST").upper()
             payload = entry.get("payload", {})
             headers = entry.get("headers", {})
-            parser = entry.get("parser", "first_text")  # parser hint
-            # Replace token "<PROMPT>" in payload recursively if present
-            def substitute(obj):
-                if isinstance(obj, str):
-                    return obj.replace("<PROMPT>", prompt)
-                if isinstance(obj, list):
-                    return [substitute(x) for x in obj]
-                if isinstance(obj, dict):
-                    return {k: substitute(v) for k, v in obj.items()}
-                return obj
-            payload_sub = substitute(payload)
+            parser = entry.get("parser", "first_text")
+
+            # Replace <PROMPT> in payload
+            payload_sub = self._substitute_prompt(payload, prompt)
+            # Substitute environment references in headers
+            headers_sub = self._substitute_env_in_headers(headers)
+
             try:
-                resp = requests.post(url, json=payload_sub, headers=headers, timeout=20)
+                if method == 'GET':
+                    # if payload_sub is a dict, use as query params
+                    params = payload_sub if isinstance(payload_sub, dict) else None
+                    resp = requests.get(url, params=params, headers=headers_sub, timeout=20)
+                else:
+                    resp = requests.post(url, json=payload_sub, headers=headers_sub, timeout=20)
                 resp.raise_for_status()
-                data = resp.json()
+                # Try to parse JSON
+                try:
+                    data = resp.json()
+                except Exception:
+                    data = resp.text
                 # Try common shapes
                 if parser == "first_text":
-                    # many Spaces return {"data": [{"name":"...","value":"..."}]} or simple {"data": ["..."]}
                     if isinstance(data, dict) and "data" in data:
                         d = data["data"]
                         if isinstance(d, list) and d:
-                            # if first item is dict with 'generated_text' or 'text' or 'value'
                             first = d[0]
                             if isinstance(first, dict):
-                                for k in ("generated_text","text","value","content"):
+                                for k in ("generated_text", "text", "value", "content"):
                                     if k in first:
                                         return first[k]
-                                # maybe content nested
-                                # fallback to str(first)
                                 return str(first)
                             if isinstance(first, str):
                                 return first
-                    # fallback to any 'generated_text' top-level
                     if isinstance(data, dict) and "generated_text" in data:
                         return data["generated_text"]
-                    # direct string
                     if isinstance(data, str):
                         return data
                 else:
-                    # other parsers can be added
                     return str(data)
             except Exception as e:
                 last_err = str(e)
@@ -196,6 +233,7 @@ class FallbackAdapter:
         if isinstance(preferred_order, str):
             preferred_order = preferred_order.split(",")
         self.preferred_order = [p for p in (preferred_order or []) if p]
+
     async def generate_with_source(self, prompt: str, **kwargs) -> Tuple[str, str]:
         # try each in order and return first non-error result (heuristic)
         for key in self.preferred_order:
@@ -206,15 +244,12 @@ class FallbackAdapter:
                 resp = await adapter.generate(prompt, **kwargs)
             except Exception as e:
                 resp = f"Adapter {key} crashed: {e}"
-            # Treat some responses as failures
             if not resp:
                 continue
-            # heuristics: adapter returns error string containing 'not configured' or 'error'
             low = resp.lower() if isinstance(resp, str) else ""
             if "not configured" in low or "error" in low or "failed" in low:
                 continue
             return key, resp
-        # nothing worked; return first adapter's last message or generic message
         return "none", "All backends failed or are not configured. See README for how to add public Spaces or free tokens."
 
 # Instantiate adapters registry
