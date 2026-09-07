@@ -35,8 +35,8 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>Personal AI Agent — Beginner Dashboard (no server required)</h1>
-      <p class="lead">Open this file in your browser. The dashboard will try a list of public Hugging Face Spaces endpoints (pre-filled). If one supports direct browser access, you'll get a response. If you see CORS errors, run a tiny local server (instructions below).</p>
+      <h1>Personal AI Agent — Beginner Dashboard (server-integrated)</h1>
+      <p class="lead">Open this page (served by the server at http://127.0.0.1:8000/) for the best experience. The dashboard can try public Hugging Face Spaces directly (may hit CORS) or use the server's public backend (recommended) which reads static/public_spaces.json and avoids CORS.</p>
     </header>
 
     <main class="panel">
@@ -44,7 +44,8 @@
         <div style="flex:1">
           <label class="small">Mode</label>
           <select id="flowMode">
-            <option value="tryAll">Try public endpoints (automatic)</option>
+            <option value="tryAll">Try public endpoints (automatic, client-side)</option>
+            <option value="serverPublic">Use server public backend (recommended)</option>
             <option value="directTest">Test specific public endpoint</option>
           </select>
         </div>
@@ -61,7 +62,7 @@
         <textarea id="promptInput" placeholder="Type your prompt, e.g. 'Explain recursion like I'm 10'"></textarea>
         <div class="row" style="margin-top:8px">
           <div style="flex:1" class="controls">
-            <button id="runBtn">Run (try public endpoints)</button>
+            <button id="runBtn">Run</button>
             <button id="runSingleBtn" class="secondary">Run selected space only</button>
             <span id="status" class="muted" style="margin-left:8px"></span>
           </div>
@@ -74,22 +75,23 @@
       <section style="margin-top:12px">
         <h3 style="margin:8px 0 6px">Quick Getting Started</h3>
         <ol style="padding-left:18px; margin:0 0 8px">
-          <li>Open this file in your browser (double-click index.html). If responses fail due to CORS, run a local server: <code>python -m http.server 8000</code> and open <code>http://127.0.0.1:8000</code>.</li>
-          <li>Type a prompt and press "Run (try public endpoints)". The dashboard will try each prefilled public endpoint until one returns a usable response.</li>
-          <li>If you find a working endpoint, click "Save" in the right panel to keep it in browser storage and export it to copy into a server-side static/public_spaces.json later (optional).</li>
+          <li>Run the server and open this page: <code>http://127.0.0.1:8000/</code>. Server mode avoids CORS issues.</li>
+          <li>Type a prompt, choose mode, and press Run. When using server public backend, the server will try endpoints listed in static/public_spaces.json until one works.</li>
+          <li>To add reliable endpoints: test endpoints here, save them locally, then click "Save to server" and provide the admin token (SAVE_TOKEN) to write to static/public_spaces.json on the server.</li>
         </ol>
       </section>
     </main>
 
     <aside class="panel">
       <h3 style="margin:4px 0 8px">Public Spaces — built-in examples</h3>
-      <p class="muted">These examples are prefilled based on common Gradio/Spaces shapes. Availability and CORS policy vary by Space owner.</p>
+      <p class="muted">These examples are prefilled. Availability and CORS vary by Space owner.</p>
 
       <div>
         <label class="small">Saved (local)</label>
         <div class="space-list" id="spaceList"></div>
         <div style="display:flex; gap:8px; margin-top:8px">
           <button id="exportBtn" class="secondary">Export JSON</button>
+          <button id="saveServerBtn" class="secondary">Save to server</button>
           <button id="clearSaved" class="secondary">Clear saved</button>
         </div>
       </div>
@@ -127,42 +129,23 @@
       <div>
         <h4 style="margin:8px 0 6px">Notes</h4>
         <ul style="padding-left:18px; margin:0 0 8px" class="muted">
-          <li>Common payloads: {"data":["&lt;PROMPT&gt;"]} or {"inputs":"&lt;PROMPT&gt;"}. Use the right shape for the Space you target.</li>
-          <li>CORS: if the browser blocks the fetch due to CORS, either run a local static server or add the endpoint to the server static/public_spaces.json (if you run the server).</li>
-          <li>Public Spaces are free but unreliable — add multiple endpoints to increase chances.</li>
+          <li>Common payloads: {"data":["&lt;PROMPT&gt;"]} or {"inputs":"&lt;PROMPT&gt;"}.</li>
+          <li>Server save requires SAVE_TOKEN set on the server and the admin token provided in the UI when saving.</li>
+          <li>Public Spaces are free but can be rate-limited — add multiple endpoints to increase uptime.</li>
         </ul>
       </div>
     </aside>
 
     <footer class="muted">
-      This is a beginner-friendly client-only tool. If you want a more reliable experience, run a tiny server and use the server-side fallback version I can provide next.
+      This dashboard integrates with the server to provide streaming and safe server-side public endpoints management.
     </footer>
   </div>
 
 <script>
-/* Built-in public Spaces examples (pre-filled).
-   These are examples that commonly use the {"data":["<PROMPT>"]} shape.
-   Availability/CORS is out of our control. Add more entries here when you find working endpoints.
-*/
 const builtInSpaces = [
-  {
-    name: "abidlabs/en2fr (translator example)",
-    url: "https://abidlabs-en2fr.hf.space/run/predict",
-    headers: {"Content-Type":"application/json"},
-    payload: {"data":["<PROMPT>"]}
-  },
-  {
-    name: "tomsoderlund/rest-api-with-gradio (echo demo)",
-    url: "https://tomsoderlund-rest-api-with-gradio.hf.space/run/predict",
-    headers: {"Content-Type":"application/json"},
-    payload: {"data":["<PROMPT>"]}
-  },
-  {
-    name: "abidlabs/whisper (speech demo - may require audio shape)",
-    url: "https://abidlabs-whisper.hf.space/gradio_api/predict",
-    headers: {"Content-Type":"application/json"},
-    payload: {"data":["<PROMPT>"]}
-  }
+  { name: "abidlabs/en2fr (translator example)", url: "https://abidlabs-en2fr.hf.space/run/predict", headers: {"Content-Type":"application/json"}, payload: {"data":["<PROMPT>"]} },
+  { name: "tomsoderlund/rest-api-with-gradio (echo demo)", url: "https://tomsoderlund-rest-api-with-gradio.hf.space/run/predict", headers: {"Content-Type":"application/json"}, payload: {"data":["<PROMPT>"]} },
+  { name: "abidlabs/whisper (speech demo)", url: "https://abidlabs-whisper.hf.space/gradio_api/predict", headers: {"Content-Type":"application/json"}, payload: {"data":["<PROMPT>"]} }
 ];
 
 const spaceListEl = document.getElementById('spaceList');
@@ -177,181 +160,65 @@ const testBtn = document.getElementById('testBtn');
 const saveBtn = document.getElementById('saveBtn');
 const exportBtn = document.getElementById('exportBtn');
 const clearSaved = document.getElementById('clearSaved');
+const saveServerBtn = document.getElementById('saveServerBtn');
 const promptInput = document.getElementById('promptInput');
 const chatWindow = document.getElementById('chatWindow');
 const statusEl = document.getElementById('status');
 const flowMode = document.getElementById('flowMode');
 const previewLen = document.getElementById('previewLen');
 
-let saved = []; // local saved endpoints (in browser localStorage)
+let saved = [];
 const STORAGE_KEY = 'publicSpaces:v1';
 
-/* Helpers */
-function showStatus(msg, transient=true){
-  statusEl.textContent = msg || '';
-  if (transient && msg) setTimeout(()=>{ if (statusEl.textContent === msg) statusEl.textContent = ''; }, 5000);
-}
-function addChat(who, text){
-  const d = document.createElement('div'); d.className='msg';
-  d.innerHTML = `<div><strong class="who">${escapeHtml(who)}:</strong> <span>${escapeHtml(String(text)).slice(0, parseInt(previewLen.textContent)).replace(/\n/g,'<br/>')}</span></div>`;
-  if (who === 'user') d.classList.add('user');
-  chatWindow.appendChild(d); chatWindow.scrollTop = chatWindow.scrollHeight;
-}
-function escapeHtml(s){ return String(s).replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'})[c]); }
+function showStatus(msg, transient=true){ statusEl.textContent = msg || ''; if (transient && msg) setTimeout(()=>{ if (statusEl.textContent === msg) statusEl.textContent = ''; }, 6000); }
+function escapeHtml(s){ return String(s).replace(/[&<>\"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\\':'\\\\','"':'&quot;',"'":'&#39;','`':'&#96;'})[c]); }
+function addChat(who, text){ const d = document.createElement('div'); d.className='msg'; d.innerHTML = `<div><strong class="who">${escapeHtml(who)}:</strong> <span>${escapeHtml(String(text)).slice(0, parseInt(previewLen.textContent)).replace(/\n/g,'<br/>')}</span></div>`; if (who === 'user') d.classList.add('user'); chatWindow.appendChild(d); chatWindow.scrollTop = chatWindow.scrollHeight; }
 
-function saveToLocal(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-}
-function loadFromLocal(){
-  try{ saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || []; } catch(e){ saved = []; }
-}
-function renderSaved(){
-  spaceListEl.innerHTML = '';
-  const list = saved.length ? saved : builtInSpaces;
-  for (let i=0;i<list.length;i++){
-    const s = list[i];
-    const item = document.createElement('div'); item.className='space-item';
-    const left = document.createElement('div'); left.style.flex='1';
-    left.innerHTML = `<strong>${escapeHtml(s.name || s.url)}</strong><div class="muted" style="font-size:12px">${escapeHtml(s.url)}</div>`;
-    const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px';
-    const test = document.createElement('button'); test.textContent='Test'; test.onclick = async ()=>{ await fillAndTest(s); };
-    const fill = document.createElement('button'); fill.textContent='Fill'; fill.className='secondary'; fill.onclick = ()=>{ fillForm(s); showStatus('Form filled'); };
-    const save = document.createElement('button'); save.textContent = (saved.find(x=>x.url===s.url) ? 'Saved' : 'Save'); save.className='secondary'; save.onclick = ()=>{
-      if (!saved.find(x=>x.url===s.url)) { saved.push(s); saveToLocal(); renderSaved(); showStatus('Saved'); } else { showStatus('Already saved'); }
-    };
-    right.appendChild(test); right.appendChild(fill); right.appendChild(save);
-    item.appendChild(left); item.appendChild(right);
-    spaceListEl.appendChild(item);
-  }
-}
+function saveToLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); }
+function loadFromLocal(){ try{ saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || []; } catch(e){ saved = []; } }
+function renderSaved(){ spaceListEl.innerHTML = ''; const list = saved.length ? saved : builtInSpaces; for (let i=0;i<list.length;i++){ const s = list[i]; const item = document.createElement('div'); item.className='space-item'; const left = document.createElement('div'); left.style.flex='1'; left.innerHTML = `<strong>${escapeHtml(s.name || s.url)}</strong><div class="muted" style="font-size:12px">${escapeHtml(s.url)}</div>`; const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px'; const test = document.createElement('button'); test.textContent='Test'; test.onclick = async ()=>{ await fillAndTest(s); }; const fill = document.createElement('button'); fill.textContent='Fill'; fill.className='secondary'; fill.onclick = ()=>{ fillForm(s); showStatus('Form filled'); }; const save = document.createElement('button'); save.textContent = (saved.find(x=>x.url===s.url) ? 'Saved' : 'Save'); save.className='secondary'; save.onclick = ()=>{ if (!saved.find(x=>x.url===s.url)) { saved.push(s); saveToLocal(); renderSaved(); showStatus('Saved'); } else { showStatus('Already saved'); } }; right.appendChild(test); right.appendChild(fill); right.appendChild(save); item.appendChild(left); item.appendChild(right); spaceListEl.appendChild(item); } }
 
-function fillForm(s){
-  spaceNameEl.value = s.name || '';
-  spaceUrlEl.value = s.url || '';
-  spaceHeadersEl.value = JSON.stringify(s.headers || {"Content-Type":"application/json"});
-  spacePayloadEl.value = JSON.stringify(s.payload || {"data":["<PROMPT>"]}, null, 0);
-}
+function fillForm(s){ spaceNameEl.value = s.name || ''; spaceUrlEl.value = s.url || ''; spaceHeadersEl.value = JSON.stringify(s.headers || {"Content-Type":"application/json"}); spacePayloadEl.value = JSON.stringify(s.payload || {"data":["<PROMPT>"]}, null, 0); }
+async function fillAndTest(s){ fillForm(s); await testEndpoint(); }
 
-async function fillAndTest(s){
-  fillForm(s);
-  await testEndpoint();
-}
+function substitute(template, prompt){ if (typeof template === 'object') { const cloned = JSON.parse(JSON.stringify(template)); const str = JSON.stringify(cloned); const replaced = str.replace(/<PROMPT>/g, prompt); try { return JSON.parse(replaced); } catch(e) { return replaced; } } else if (typeof template === 'string') { return template.replace(/<PROMPT>/g, prompt); } else { return template; } }
 
-function substitute(template, prompt){
-  if (typeof template === 'object') {
-    const cloned = JSON.parse(JSON.stringify(template));
-    const str = JSON.stringify(cloned);
-    const replaced = str.replace(/<PROMPT>/g, prompt);
-    try { return JSON.parse(replaced); } catch(e) { return replaced; }
-  } else if (typeof template === 'string') {
-    return template.replace(/<PROMPT>/g, prompt);
-  } else {
-    return template;
-  }
-}
+async function tryAllEndpoints(prompt){ addChat('user', prompt); showStatus('Trying endpoints...'); const list = (saved.length ? saved : []).concat(builtInSpaces.filter(s=>!(saved.find(x=>x.url===s.url)))); let lastErr = null; for (let i=0;i<list.length;i++){ const s = list[i]; showStatus(`Testing: ${s.name || s.url}`); try{ const headers = s.headers || {"Content-Type":"application/json"}; const bodyObj = substitute(s.payload || {"data":["<PROMPT>"]}, prompt); const resp = await fetch(s.url, {method:'POST', headers, body: JSON.stringify(bodyObj)}); const text = await resp.text(); let parsed = null; try { parsed = JSON.parse(text); } catch(e){ parsed = null; } let candidate = null; if (parsed){ if (Array.isArray(parsed.data) && parsed.data.length && typeof parsed.data[0] === 'string') candidate = parsed.data[0]; else if (parsed.generated_text) candidate = parsed.generated_text; else if (parsed[0] && parsed[0].generated_text) candidate = parsed[0].generated_text; else candidate = JSON.stringify(parsed); } else { candidate = text; } if (candidate && candidate.trim().length > 0) { addChat('bot', candidate); showStatus(`Success from ${s.name || s.url}`); return {ok:true, source: s.url, response: candidate}; } lastErr = `Empty response from ${s.url}`; }catch(err){ lastErr = String(err); } } addChat('bot', 'All endpoints failed or returned no usable text. Last error: ' + lastErr); showStatus('All failed', false); return {ok:false, error:lastErr}; }
 
-/* Try endpoints in order until one returns a plausible text */
-async function tryAllEndpoints(prompt){
+async function testEndpoint(){ const url = spaceUrlEl.value.trim(); if (!url){ spaceResultEl.textContent = 'Enter endpoint URL'; return; } const headersText = spaceHeadersEl.value.trim(); const payloadText = spacePayloadEl.value.trim() || '{"data":["<PROMPT>"]}'; try{ const headers = headersText ? JSON.parse(headersText) : {"Content-Type":"application/json"}; const body = substitute( tryParseJson(payloadText), promptInput.value || 'Hello world' ); spaceResultEl.textContent = 'Running...'; const res = await fetch(url, {method:'POST', headers, body: JSON.stringify(body)}); const txt = await res.text(); try { const j = JSON.parse(txt); spaceResultEl.textContent = JSON.stringify(j, null, 2); addChat('bot', j.data ? (Array.isArray(j.data) ? j.data[0] : JSON.stringify(j)) : JSON.stringify(j)); showStatus('Success'); } catch(e){ spaceResultEl.textContent = txt; addChat('bot', txt); showStatus('Raw text returned'); } }catch(err){ spaceResultEl.textContent = 'Test failed: ' + err.message + '\n\nIf you see CORS errors, try running a local static server (python -m http.server 8000) and open this page via http://127.0.0.1:8000'; } }
+
+function tryParseJson(s){ try { return JSON.parse(s); } catch(e) { return s; } }
+
+// Streaming client (reads POST-based SSE from /chat/stream)
+async function streamChat(prompt, backend=''){
   addChat('user', prompt);
-  showStatus('Trying endpoints...');
-  // create combined list: saved first, then built-in others
-  const list = (saved.length ? saved : []).concat(builtInSpaces.filter(s=>!(saved.find(x=>x.url===s.url))));
-  let lastErr = null;
-  for (let i=0;i<list.length;i++){
-    const s = list[i];
-    showStatus(`Testing: ${s.name || s.url}`);
-    try{
-      const headers = s.headers || {"Content-Type":"application/json"};
-      const bodyObj = substitute(s.payload || {"data":["<PROMPT>"]}, prompt);
-      const resp = await fetch(s.url, {method:'POST', headers, body: JSON.stringify(bodyObj)});
-      const text = await resp.text();
-      // try parse JSON
-      let parsed = null;
-      try { parsed = JSON.parse(text); } catch(e){ parsed = null; }
-      // heuristics: if parsed has 'data' array with strings or 'generated_text', treat as success
-      let candidate = null;
-      if (parsed){
-        if (Array.isArray(parsed.data) && parsed.data.length && typeof parsed.data[0] === 'string') candidate = parsed.data[0];
-        else if (parsed.generated_text) candidate = parsed.generated_text;
-        else if (parsed[0] && parsed[0].generated_text) candidate = parsed[0].generated_text;
-        else candidate = JSON.stringify(parsed);
-      } else {
-        // plain text
-        candidate = text;
-      }
-      if (candidate && candidate.trim().length > 0) {
-        addChat('bot', candidate);
-        showStatus(`Success from ${s.name || s.url}`);
-        return {ok:true, source: s.url, response: candidate};
-      }
-      lastErr = `Empty response from ${s.url}`;
-    }catch(err){
-      lastErr = String(err);
-      // continue trying others
-    }
-  }
-  addChat('bot', 'All endpoints failed or returned no usable text. Last error: ' + lastErr);
-  showStatus('All failed', false);
-  return {ok:false, error:lastErr};
+  showStatus('Streaming from server...');
+  // create bot container
+  const botDiv = document.createElement('div'); botDiv.className='msg'; botDiv.innerHTML = `<div><strong class="who">bot:</strong> <span id="streaming-content"></span></div>`; chatWindow.appendChild(botDiv); chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  const res = await fetch('/chat/stream', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({prompt, backend}) });
+  if (!res.ok){ const txt = await res.text(); addChat('bot', 'Stream failed: '+txt); showStatus('Stream failed', false); return; }
+  const reader = res.body.getReader(); const decoder = new TextDecoder('utf-8'); let buf='';
+  while(true){ const {value, done} = await reader.read(); if (done) break; buf += decoder.decode(value, {stream:true}); let parts = buf.split(/\r?\n\r?\n/); buf = parts.pop(); for (const part of parts){ for (const line of part.split(/\r?\n/)){ if (line.startsWith('data:')){ const chunk = line.slice(5).trim(); const span = document.getElementById('streaming-content'); span.innerHTML += escapeHtml(chunk); chatWindow.scrollTop = chatWindow.scrollHeight; } else if (line.startsWith('event:')){ /* handle events if needed */ } } } }
+  if (buf){ const m = buf.match(/data:\s*(.*)/); if (m){ const span = document.getElementById('streaming-content'); span.innerHTML += escapeHtml(m[1]); } }
+  showStatus('Stream finished');
 }
 
-/* Test a single endpoint currently in the form */
-async function testEndpoint(){
-  const url = spaceUrlEl.value.trim();
-  if (!url){ spaceResultEl.textContent = 'Enter endpoint URL'; return; }
-  const headersText = spaceHeadersEl.value.trim();
-  const payloadText = spacePayloadEl.value.trim() || '{"data":["<PROMPT>"]}';
-  try{
-    const headers = headersText ? JSON.parse(headersText) : {"Content-Type":"application/json"};
-    const body = substitute( tryParseJson(payloadText), promptInput.value || 'Hello world' );
-    spaceResultEl.textContent = 'Running...';
-    const res = await fetch(url, {method:'POST', headers, body: JSON.stringify(body)});
-    const txt = await res.text();
-    try { const j = JSON.parse(txt); spaceResultEl.textContent = JSON.stringify(j, null, 2); addChat('bot', j.data ? (Array.isArray(j.data) ? j.data[0] : JSON.stringify(j)) : JSON.stringify(j)); showStatus('Success'); }
-    catch(e){ spaceResultEl.textContent = txt; addChat('bot', txt); showStatus('Raw text returned'); }
-  }catch(err){
-    spaceResultEl.textContent = 'Test failed: ' + err.message + '\n\nIf you see CORS errors, try running a local static server (python -m http.server 8000) and open this page via http://127.0.0.1:8000';
-  }
-}
+// Save saved/public entries to server static/public_spaces.json
+async function saveToServer(){ if (!saved.length){ alert('No saved endpoints to send. Save or use built-in examples first.'); return; } const token = prompt('Enter admin token (SAVE_TOKEN) to save to server:'); if (!token) return; showStatus('Saving to server...'); try{ const entries = (saved.length ? saved : builtInSpaces).map(s=>({url:s.url, payload: s.payload || {"data":["<PROMPT>"]}, headers: s.headers || {"Content-Type":"application/json"}, parser: s.parser || 'first_text'})); const res = await fetch('/public_spaces/save', { method:'POST', headers: {'Content-Type':'application/json','X-ADMIN-TOKEN': token}, body: JSON.stringify(entries) }); const data = await res.json(); if (!res.ok){ addChat('bot','Save failed: '+ JSON.stringify(data)); showStatus('Save failed', false); } else { addChat('bot','Saved to server: wrote '+ data.written + ' entries'); showStatus('Saved to server', true); } }catch(err){ addChat('bot','Save request failed: '+err.message); showStatus('Save failed', false); } }
 
-/* utilities */
-function tryParseJson(s){
-  try { return JSON.parse(s); } catch(e) { return s; }
-}
-
-/* wire up UI events */
-runBtn.addEventListener('click', async ()=> {
-  const prompt = promptInput.value.trim();
-  if (!prompt){ showStatus('Type a prompt first', false); return; }
-  await tryAllEndpoints(prompt);
-});
+// UI events
+runBtn.addEventListener('click', async ()=>{ const prompt = promptInput.value.trim(); if (!prompt){ showStatus('Type a prompt first', false); return; } const mode = flowMode.value; if (mode === 'tryAll'){ await tryAllEndpoints(prompt); } else if (mode === 'serverPublic'){ // call server fallback via streaming for nicer UX await streamChat(prompt, 'public'); } else { // direct test mode: same as tryAll but will only use single configured endpoint if present await tryAllEndpoints(prompt); } });
 runSingleBtn.addEventListener('click', testEndpoint);
 testBtn.addEventListener('click', testEndpoint);
-saveBtn.addEventListener('click', ()=>{
-  const entry = {
-    name: spaceNameEl.value.trim() || spaceUrlEl.value.trim(),
-    url: spaceUrlEl.value.trim(),
-    headers: (()=>{ try{ return JSON.parse(spaceHeadersEl.value || '{"Content-Type":"application/json"}'); }catch(e){ return {"Content-Type":"application/json"} } })(),
-    payload: (()=>{ try{ return JSON.parse(spacePayloadEl.value); }catch(e){ return spacePayloadEl.value; } })()
-  };
-  if (!entry.url) { alert('Enter URL'); return; }
-  if (!saved.find(x=>x.url===entry.url)) { saved.push(entry); saveToLocal(); renderSaved(); showStatus('Saved locally'); } else showStatus('Already saved');
-});
-exportBtn.addEventListener('click', ()=>{
-  // Export saved items as JSON to copy into server static/public_spaces.json
-  const out = (saved.length ? saved : builtInSpaces).map(s => ({url:s.url, payload:s.payload || {"data":["<PROMPT>"]}, headers:s.headers || {"Content-Type":"application/json"}, parser:'first_text'}));
-  const txt = JSON.stringify(out, null, 2);
-  prompt('Copy this JSON into static/public_spaces.json on your server (or save it locally):', txt);
-});
-clearSaved.addEventListener('click', ()=>{ if(confirm('Clear saved entries?')){ saved=[]; saveToLocal(); renderSaved(); showStatus('Cleared'); }});
+saveBtn.addEventListener('click', ()=>{ const entry = { name: spaceNameEl.value.trim() || spaceUrlEl.value.trim(), url: spaceUrlEl.value.trim(), headers: (()=>{ try{ return JSON.parse(spaceHeadersEl.value || '{"Content-Type":"application/json"}'); }catch(e){ return {"Content-Type":"application/json"}; } })(), payload: (()=>{ try{ return JSON.parse(spacePayloadEl.value); }catch(e){ return spacePayloadEl.value; } })() }; if (!entry.url){ alert('Enter URL'); return; } if (!saved.find(x=>x.url===entry.url)){ saved.push(entry); saveToLocal(); renderSaved(); showStatus('Saved locally'); } else { showStatus('Already saved'); } });
+exportBtn.addEventListener('click', ()=>{ const out = (saved.length ? saved : builtInSpaces).map(s => ({url:s.url, payload:s.payload || {"data":["<PROMPT>"]}, headers:s.headers || {"Content-Type":"application/json"}, parser:'first_text'})); const txt = JSON.stringify(out, null, 2); prompt('Copy this JSON into static/public_spaces.json on your server (or save it locally):', txt); });
+clearSaved.addEventListener('click', ()=>{ if (confirm('Clear saved entries?')){ saved=[]; saveToLocal(); renderSaved(); showStatus('Cleared'); } });
+saveServerBtn.addEventListener('click', saveToServer);
 document.getElementById('clearChat').addEventListener('click', ()=>{ chatWindow.innerHTML=''; });
 
-/* startup */
-loadFromLocal();
-renderSaved();
-fillForm(builtInSpaces[0]);
-showStatus('Ready — try "Run" (may be blocked by CORS on some endpoints).', true);
-
+// startup
+loadFromLocal(); renderSaved(); fillForm(builtInSpaces[0]); showStatus('Ready — use server mode for best results (avoid CORS).');
 </script>
 </body>
 </html>
